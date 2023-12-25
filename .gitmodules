@@ -1,0 +1,3 @@
+[submodule "vendors/Core-scripts"]
+	path = vendors/Core-scripts
+	url = https://github.com/tinycorelinux/Core-scripts.git
