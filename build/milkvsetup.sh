@@ -18,7 +18,7 @@ function _build_default_env()
 
 function gettop()
 {
-  local TOPFILE=build/cvisetup.sh
+  local TOPFILE=build/milkvsetup.sh
   if [ -n "$TOP" -a -f "$TOP/$TOPFILE" ] ; then
     # The following circumlocution ensures we remove symlinks from TOP.
     (cd "$TOP"; PWD= /bin/pwd)
@@ -529,19 +529,19 @@ function cvi_setup_env()
   # envs setup for specific ${SDK_VER}
   envs_sdk_ver
 
-  if [ "${STORAGE_TYPE}" == "spinand" ]; then
-    PAGE_SUFFIX=2k
-    if [ ${NANDFLASH_PAGESIZE} == 4096 ]; then
-      PAGE_SUFFIX=4k
-    fi
+#  if [ "${STORAGE_TYPE}" == "spinand" ]; then
+#    PAGE_SUFFIX=2k
+#    if [ ${NANDFLASH_PAGESIZE} == 4096 ]; then
+#      PAGE_SUFFIX=4k
+#    fi
 
-    if [[ "$ENABLE_ALIOS" != "y" ]]; then
-      pushd "$BUILD_PATH"/boards/"${CHIP_ARCH,,}"/"$PROJECT_FULLNAME"/partition/
-      ln -fs ../../../default/partition/partition_spinand_page_"$PAGE_SUFFIX".xml \
-        partition_"$STORAGE_TYPE".xml
-      popd
-    fi
-  fi
+#    if [[ "$ENABLE_ALIOS" != "y" ]]; then
+#      pushd "$BUILD_PATH"/boards/"${CHIP_ARCH,,}"/"$PROJECT_FULLNAME"/partition/
+#      ln -fs ../../../default/partition/partition_spinand_page_"$PAGE_SUFFIX".xml \
+#        partition_"$STORAGE_TYPE".xml
+#      popd
+#    fi
+#  fi
 
   # configure flash partition table
   if [ -z "${STORAGE_TYPE}" ]; then
@@ -566,6 +566,7 @@ function cvi_setup_env()
   export BR_OVERLAY_DIR=${BR_DIR}/board/${MV_VENDOR}/${MV_BOARD}/overlay
   export BR_DEFCONFIG=${BR_BOARD}_defconfig
   export BR_ROOTFS_DIR="$OUTPUT_DIR"/tmp-rootfs
+  export BR_MV_VENDOR_DIR=${BR_DIR}/board/${MV_VENDOR}
 }
 
 cvi_print_env()

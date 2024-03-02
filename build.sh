@@ -56,7 +56,7 @@ function get_toolchain()
 
 function get_available_board()
 {
-  MILKV_BOARD_ARRAY=( $(find device -mindepth 1 -maxdepth 1 -type d -print ! -name "." | awk -F/ '{ print $NF }' | sort -t '-' -k2,2) )
+  MILKV_BOARD_ARRAY=( $(find device -mindepth 1 -maxdepth 1 -not -path 'device/common' -type d -print ! -name "." | awk -F/ '{ print $NF }' | sort -t '-' -k2,2) )
   #echo ${MILKV_BOARD_ARRAY[@]}
 
   MILKV_BOARD_ARRAY_LEN=${#MILKV_BOARD_ARRAY[@]}
@@ -99,6 +99,15 @@ function prepare_env()
   defconfig ${MV_BOARD_LINK} > /dev/null 2>&1
 
   echo "OUTPUT_DIR: ${OUTPUT_DIR}"  # @build/milkvsetup.sh
+
+  if [ "${STORAGE_TYPE}" == "sd" ]; then
+    MILKV_IMAGE_CONFIG=device/${MILKV_BOARD}/genimage.cfg
+
+    if [ ! -f ${MILKV_IMAGE_CONFIG} ]; then
+      print_err "${MILKV_IMAGE_CONFIG} not found!"
+      exit 1
+    fi
+  fi
 }
 
 function milkv_build()
@@ -111,6 +120,11 @@ function milkv_build()
     popd
   fi
 
+  # clean emmc/nor/nand img
+  if [ -f "${OUTPUT_DIR}/upgrade.zip" ]; then
+	  rm -rf ${OUTPUT_DIR}/*
+  fi
+   
   clean_all
   build_all
   if [ $? -eq 0 ]; then
@@ -121,44 +135,83 @@ function milkv_build()
   fi
 }
 
-function milkv_pack()
+function milkv_pack_sd()
 {
   pack_sd_image
 
   [ ! -d out ] && mkdir out
 
-  image_count=`ls ${OUTPUT_DIR}/*.img | wc -l`
-  if [ ${image_count} -ge 0 ]; then
-    mv ${OUTPUT_DIR}/*.img out/
+  img_in="${OUTPUT_DIR}/${MILKV_BOARD}.img"
+  img_out="${MILKV_BOARD}-`date +%Y%m%d-%H%M`.img"
 
-    # rename milkv-duo.img file with time
-    pushd out
-    for img in *.img
-    do
-      if [ "${img}" == "${MILKV_BOARD}.img" ]; then
-        mv $img ${MILKV_BOARD}-`date +%Y%m%d-%H%M`.img
-      fi
-    done
-    popd
-
-    # show latest img
-    latest_img=`ls -t out/*.img | head -n1`
-    if [ -z "${latest_img// }" ]; then
-      print_err "Gen image failed!"
-    else
-      print_info "Gen image successful: ${latest_img}"
-    fi
+  if [ -f "${img_in}" ]; then
+    mv ${img_in} out/${img_out}
+    print_info "Create SD image successful: out/${img_out}"
   else
-    print_err "Create sd img failed!"
+    print_err "Create SD image failed!"
     exit 1
+  fi
+}
+
+function milkv_pack_emmc()
+{
+  [ ! -d out ] && mkdir out
+
+  img_in="${OUTPUT_DIR}/upgrade.zip"
+  img_out="${MILKV_BOARD}-`date +%Y%m%d-%H%M`.zip"
+
+  if [ -f "${img_in}" ]; then
+    mv ${img_in} out/${img_out}
+    print_info "Create eMMC image successful: out/${img_out}"
+  else
+    print_err "Create eMMC image failed!"
+    exit 1
+  fi
+}
+
+function milkv_pack_nor_nand()
+{
+  [ ! -d out ] && mkdir out
+	
+  if [ -f "${OUTPUT_DIR}/upgrade.zip" ]; then
+	img_out_patch=${MILKV_BOARD}-`date +%Y%m%d-%H%M`
+	mkdir -p out/$img_out_patch
+  
+	if [ "${STORAGE_TYPE}" == "spinor" ]; then
+		cp ${OUTPUT_DIR}/fip.bin out/$img_out_patch
+		cp ${OUTPUT_DIR}/*.spinor out/$img_out_patch 		
+	else
+		cp ${OUTPUT_DIR}/fip.bin out/$img_out_patch
+		cp ${OUTPUT_DIR}/*.spinand out/$img_out_patch 	
+	fi
+	
+	echo "Copy all to a blank tf card, power on and automatically download firmware to NOR or NAND in U-boot." >> out/$img_out_patch/how_to_download.txt
+    print_info "Create spinor/nand img successful: ${img_out_patch}"
+  else
+    print_err "Create spinor/nand img failed!"
+    exit 1
+  fi
+}
+
+function milkv_pack()
+{
+  if [ "${STORAGE_TYPE}" == "sd" ]; then
+    milkv_pack_sd
+  elif [ "${STORAGE_TYPE}" == "emmc" ]; then
+    milkv_pack_emmc
+  else
+    milkv_pack_nor_nand
   fi
 }
 
 function build_info()
 {
   print_info "Target Board: ${MILKV_BOARD}"
+  print_info "Target Board Storage: ${STORAGE_TYPE}"
   print_info "Target Board Config: ${MILKV_BOARD_CONFIG}"
-  print_info "Target Image Config: ${MILKV_IMAGE_CONFIG}"
+  if [ "${STORAGE_TYPE}" == "sd" ]; then
+    print_info "Target Image Config: ${MILKV_IMAGE_CONFIG}"
+  fi
 }
 
 get_available_board
@@ -198,25 +251,19 @@ if [ -z "${MILKV_BOARD// }" ]; then
 fi
 
 MILKV_BOARD_CONFIG=device/${MILKV_BOARD}/boardconfig.sh
-MILKV_IMAGE_CONFIG=device/${MILKV_BOARD}/genimage.cfg
 
 if [ ! -f ${MILKV_BOARD_CONFIG} ]; then
   print_err "${MILKV_BOARD_CONFIG} not found!"
   exit 1
 fi
 
-if [ ! -f ${MILKV_IMAGE_CONFIG} ]; then
-  print_err "${MILKV_IMAGE_CONFIG} not found!"
-  exit 1
-fi
-
 get_toolchain
-
-build_info
 
 export MILKV_BOARD="${MILKV_BOARD}"
 
 prepare_env
+
+build_info
 
 milkv_build
 milkv_pack
